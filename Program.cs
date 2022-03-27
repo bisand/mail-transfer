@@ -1,7 +1,5 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-// using S22.Imap;
-
 using System.Text;
 using MailKit;
 using MailKit.Net.Imap;
@@ -39,6 +37,8 @@ static void copyFolderMail(ImapClient clientSource, ImapClient clientDest, IMail
     {
         if (!folderSource.IsNamespace && folderSource.Exists && !folderSource.IsOpen)
             folderSource.Open(FolderAccess.ReadOnly);
+
+        //TODO: Figure out how to check if folder exists.
         IMailFolder folderDest = clientDest.GetFolder(folderSource.FullName);
         for (int i = 0; i < folderSource.Count; i++)
         {
