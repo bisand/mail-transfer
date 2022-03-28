@@ -1,12 +1,16 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.Text;
+using System.Text.RegularExpressions;
 using MailKit;
 using MailKit.Net.Imap;
+using MailKit.Search;
 
-Console.WriteLine("Hello, World!");
+Console.WriteLine("Preparing to transfer mail...");
+int totalCount = 0;
+int currentCount = 0;
 
-static void copyAllMail(ImapConfig sourceConfig, ImapConfig destConfig)
+void copyAllMail(ImapConfig sourceConfig, ImapConfig destConfig)
 {
     using (var clientSource = new ImapClient())
     {
@@ -19,34 +23,52 @@ static void copyAllMail(ImapConfig sourceConfig, ImapConfig destConfig)
             clientDest.Authenticate(destConfig.Username, destConfig.Password);
 
             // The Inbox folder is always available on all IMAP servers...
-            var personal = clientSource.GetFolder(clientSource.PersonalNamespaces[0]);
+            var folderSource = clientSource.GetFolder(clientSource.PersonalNamespaces[0]);
+            var folderDest = clientDest.GetFolder(clientDest.PersonalNamespaces[0]);
+
             // personal.Open(FolderAccess.ReadOnly);
 
-            int mailCount = countFolderMail(clientSource, personal);
-            Console.WriteLine("Total messages: {0}", mailCount);
-            copyFolderMail(clientSource, clientDest, personal);
+            totalCount = countFolderMail(clientSource, folderSource);
+            Console.WriteLine("Total messages: {0}", totalCount);
+            copyFolderMail(clientSource, folderSource, clientDest, folderDest);
         }
         clientSource.Disconnect(true);
     }
 
 }
 
-static void copyFolderMail(ImapClient clientSource, ImapClient clientDest, IMailFolder folderSource)
+void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDest)
 {
     try
     {
         if (!folderSource.IsNamespace && folderSource.Exists && !folderSource.IsOpen)
+        {
             folderSource.Open(FolderAccess.ReadOnly);
-
-        //TODO: Figure out how to check if folder exists.
-        IMailFolder folderDest = clientDest.GetFolder(folderSource.FullName);
+            folderDest.Open(FolderAccess.ReadWrite);
+        }
         for (int i = 0; i < folderSource.Count; i++)
         {
+            currentCount++;
             var message = folderSource.GetMessage(i);
+            var uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", message.MessageId));
+            if (uniqueIds == null || uniqueIds.Count < 1)
+                folderDest.Append(message);
+            Console.Write("\rProcessing folder {0}, message {1} of {2} -> {3}%                                              ", folderDest.Name, currentCount, totalCount, ((currentCount * 100) / totalCount));
         }
         foreach (var folder in folderSource.GetSubfolders(false))
         {
-            copyFolderMail(clientSource, clientDest, folder);
+            try
+            {
+                string folderName = Regex.Replace(folder.Name, @"[^0-9a-zA-ZæøåÆØÅ]+", "_");
+                var fdest = folderDest.Create(folderName, !folder.IsNamespace);
+                if (folder.IsSubscribed)
+                    fdest.Subscribe();
+                copyFolderMail(clientSource, folder, clientDest, fdest);
+            }
+            catch (System.Exception ex)
+            {
+                Console.WriteLine("Error create folder: {0} - {1}", folder.Name, ex);
+            }
         }
     }
     catch (System.Exception ex)
@@ -55,7 +77,7 @@ static void copyFolderMail(ImapClient clientSource, ImapClient clientDest, IMail
     }
 }
 
-static int countFolderMail(ImapClient client, IMailFolder imapFolder)
+int countFolderMail(ImapClient client, IMailFolder imapFolder)
 {
     try
     {
