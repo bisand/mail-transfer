@@ -56,14 +56,24 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
 
                 // The Inbox folder is always available on all IMAP servers...
                 var namespaceSource = clientSource.GetFolder(clientSource.PersonalNamespaces[0]);
-                var folderSource = namespaceSource.GetSubfolder("[Gmail]");
-                // var folderDest = clientDest.GetFolder(clientDest.PersonalNamespaces[0]);
-                var folderDest = clientDest.Inbox;
+                var folderDestRoot = clientDest.GetFolder(clientDest.PersonalNamespaces[0]);
+                // var folderDest = clientDest.Inbox;
 
+                IMailFolder folderSource;
+                totalCount = countFolderMail(clientSource, clientSource.Inbox);
+                copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Papirkurv");
                 totalCount = countFolderMail(clientSource, folderSource);
-                Console.WriteLine("Total messages: {0}", totalCount);
-                copyFolderMail(clientSource, clientSource.Inbox, clientDest, clientDest.Inbox, null);
-                copyFolderMail(clientSource, folderSource, clientDest, folderDest, clientDestExclude.Inbox);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Sendt e-post");
+                totalCount = countFolderMail(clientSource, folderSource);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
+                totalCount = countFolderMail(clientSource, folderSource);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("All e-post");
+                totalCount = countFolderMail(clientSource, folderSource);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
             }
         }
         clientSource.Disconnect(true);
@@ -71,19 +81,29 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
 
 }
 
-void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDest, IMailFolder? folderExclude)
+void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDestRoot, IMailFolder? folderExclude)
 {
     try
     {
+        Console.WriteLine("Copying folder: {0}", folderSource.Name);
+        string folderName = GetName(folderSource.Name);
+        var folderDest = folderDestRoot.Create(folderName, !folderSource.IsNamespace);
+        if (folderSource.IsSubscribed)
+            folderDest.Subscribe();
+
         if (!folderSource.IsNamespace && folderSource.Exists && !folderSource.IsOpen)
         {
             folderSource.Open(FolderAccess.ReadOnly);
+        }
+        if (!folderDest.IsNamespace && folderDest.Exists && !folderDest.IsOpen)
+        {
             folderDest.Open(FolderAccess.ReadWrite);
         }
         if (folderExclude != null)
         {
             folderExclude.Open(FolderAccess.ReadOnly);
         }
+
         for (int i = 0; i < folderSource.Count; i++)
         {
             try
@@ -101,6 +121,10 @@ void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClien
                     if (address != null)
                         uniqueIds = folderDest.Search(SearchQuery.FromContains(address.ToString()).And(SearchQuery.SubjectContains(message.Subject)));
                 }
+                if (folderExclude != null && !string.IsNullOrWhiteSpace(message?.MessageId))
+                {
+                    uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", message?.MessageId));
+                }
                 if (uniqueIds == null || uniqueIds.Count < 1)
                     folderDest.Append(message);
                 Console.Write("\rProcessing folder {0}, message {1} of {2} -> {3}%                                              ", folderDest.Name, currentCount, totalCount, ((currentCount * 100) / totalCount));
@@ -112,30 +136,19 @@ void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClien
         }
         foreach (var folder in folderSource.GetSubfolders(false))
         {
-            try
-            {
-                string folderName = GetName(folder.Name);
-                var fdest = folderDest.Create(folderName, !folder.IsNamespace);
-                if (folder.IsSubscribed)
-                    fdest.Subscribe();
-                Console.WriteLine("Entering folder: {0}", folder.Name);
-                copyFolderMail(clientSource, folder, clientDest, fdest, folderExclude);
-            }
-            catch (System.Exception ex)
-            {
-                Console.WriteLine("Error create folder: {0} - {1}", folder.Name, ex);
-            }
+            copyFolderMail(clientSource, folder, clientDest, folderDest, folderExclude);
         }
     }
     catch (System.Exception ex)
     {
         Console.WriteLine("Error: {0}", ex.Message);
     }
+    Console.WriteLine("Done!");
 }
 
 string GetName(string name)
 {
-    return Regex.Replace(name, @"[^0-9a-zA-ZæøåÆØÅ ]+", "");
+    return Regex.Replace(name, @"[^0-9a-zA-ZæøåÆØÅ\- ]+", "");
 }
 
 int countFolderMail(ImapClient client, IMailFolder imapFolder)
