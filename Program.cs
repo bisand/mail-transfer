@@ -11,12 +11,12 @@ void copyAllMail(ImapConfig sourceConfig, ImapConfig destConfig)
 {
     using (var clientSource = new ImapClient())
     {
-        clientSource.Connect(sourceConfig.Address, sourceConfig.Port, true);
+        clientSource.Connect(sourceConfig.Address, sourceConfig.Port, true, CancellationToken.None);
         clientSource.Authenticate(sourceConfig.Username, sourceConfig.Password);
 
         using (var clientDest = new ImapClient())
         {
-            clientDest.Connect(destConfig.Address, destConfig.Port, true);
+            clientDest.Connect(destConfig.Address, destConfig.Port, true, CancellationToken.None);
             clientDest.Authenticate(destConfig.Username, destConfig.Password);
 
             // The Inbox folder is always available on all IMAP servers...
@@ -25,29 +25,52 @@ void copyAllMail(ImapConfig sourceConfig, ImapConfig destConfig)
             // var folderDest = clientDest.GetFolder(clientDest.PersonalNamespaces[0]);
             var folderDest = clientDest.Inbox;
 
-            copyFolderMail(clientSource, clientSource.Inbox, clientDest, clientDest.Inbox, null);
-            copyFolderMail(clientSource, folderSource, clientDest, folderDest, null);
+            copyFolderMail(clientSource, clientSource.Inbox, clientDest, clientDest.Inbox, null, sourceConfig, destConfig);
+            copyFolderMail(clientSource, folderSource, clientDest, folderDest, null, sourceConfig, destConfig);
         }
         clientSource.Disconnect(true);
     }
+}
 
+void displaySubfolders(IMailFolder rootFolder)
+{
+    // The Inbox folder is always available on all IMAP servers...
+    var subfolders = rootFolder.GetSubfolders();
+    foreach (var folder in subfolders)
+    {
+        Console.WriteLine(folder.FullName);
+        displaySubfolders(folder);
+    }
+}
+
+void displayAllFolders(ImapConfig sourceConfig)
+{
+    using (var clientSource = new ImapClient())
+    {
+        clientSource.Connect(sourceConfig.Address, sourceConfig.Port, true, CancellationToken.None);
+        clientSource.Authenticate(sourceConfig.Username, sourceConfig.Password);
+
+        displaySubfolders(clientSource.GetFolder(clientSource.PersonalNamespaces[0]));
+
+        clientSource.Disconnect(true);
+    }
 }
 
 void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
 {
     using (var clientSource = new ImapClient())
     {
-        clientSource.Connect(sourceConfig.Address, sourceConfig.Port, true);
+        clientSource.Connect(sourceConfig.Address, sourceConfig.Port, true, CancellationToken.None);
         clientSource.Authenticate(sourceConfig.Username, sourceConfig.Password);
 
         using (var clientDest = new ImapClient())
         {
-            clientDest.Connect(destConfig.Address, destConfig.Port, true);
+            clientDest.Connect(destConfig.Address, destConfig.Port, true, CancellationToken.None);
             clientDest.Authenticate(destConfig.Username, destConfig.Password);
 
             using (var clientDestExclude = new ImapClient())
             {
-                clientDestExclude.Connect(destConfig.Address, destConfig.Port, true);
+                clientDestExclude.Connect(destConfig.Address, destConfig.Port, true, CancellationToken.None);
                 clientDestExclude.Authenticate(destConfig.Username, destConfig.Password);
 
                 // The Inbox folder is always available on all IMAP servers...
@@ -56,23 +79,24 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
                 // var folderDest = clientDest.Inbox;
 
                 IMailFolder folderSource;
-                copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null);
+                copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Papirkurv");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Sendt e-post");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("All e-post");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
             }
+            clientDest.Disconnect(true);
         }
         clientSource.Disconnect(true);
     }
 
 }
 
-void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDestRoot, IMailFolder? folderExclude)
+void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDestRoot, IMailFolder? folderExclude, ImapConfig sourceConfig, ImapConfig destConfig)
 {
     try
     {
@@ -100,25 +124,38 @@ void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClien
         {
             try
             {
-                var message = folderSource.GetMessage(i);
-                IList<UniqueId>? uniqueIds = null;
-                if (!string.IsNullOrWhiteSpace(message?.MessageId))
+                using (var message = folderSource.GetMessage(i))
                 {
-                    uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", message?.MessageId));
+                    string? messageId = message?.MessageId;
+                    IList<UniqueId>? uniqueIds = null;
+                    if (!string.IsNullOrWhiteSpace(messageId))
+                    {
+                        uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", messageId));
+                    }
+                    else if (message != null)
+                    {
+                        var address = message.From.FirstOrDefault();
+                        if (address != null)
+                            uniqueIds = folderDest.Search(SearchQuery.FromContains(address.ToString()).And(SearchQuery.SubjectContains(message.Subject)));
+                    }
+                    if (folderExclude != null && !string.IsNullOrWhiteSpace(messageId))
+                    {
+                        uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", messageId));
+                    }
+                    if (uniqueIds == null || uniqueIds.Count < 1)
+                        folderDest.Append(message);
                 }
-                else if (message != null)
-                {
-                    var address = message.From.FirstOrDefault();
-                    if (address != null)
-                        uniqueIds = folderDest.Search(SearchQuery.FromContains(address.ToString()).And(SearchQuery.SubjectContains(message.Subject)));
-                }
-                if (folderExclude != null && !string.IsNullOrWhiteSpace(message?.MessageId))
-                {
-                    uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", message?.MessageId));
-                }
-                if (uniqueIds == null || uniqueIds.Count < 1)
-                    folderDest.Append(message);
-                Console.Write("\rProcessing folder {0}, message {1} of {2} -> {3}%                                              ", folderDest.Name, i, totalCount, ((i * 100) / totalCount));
+                Console.Write("\rProcessing folder {0}, message {1} of {2} -> {3}%                                              ", folderDest.Name, i + 1, totalCount, (((i + 1) * 100) / totalCount));
+            }
+            catch (ServiceNotConnectedException ex)
+            {
+                clientSource.Disconnect(true);
+                clientSource.Connect(sourceConfig.Address, sourceConfig.Port, true, CancellationToken.None);
+                clientSource.Authenticate(sourceConfig.Username, sourceConfig.Password);
+
+                clientDest.Disconnect(true);
+                clientDest.Connect(destConfig.Address, destConfig.Port, true, CancellationToken.None);
+                clientDest.Authenticate(destConfig.Username, destConfig.Password);
             }
             catch (System.Exception ex)
             {
@@ -127,7 +164,7 @@ void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClien
         }
         foreach (var folder in folderSource.GetSubfolders(false))
         {
-            copyFolderMail(clientSource, folder, clientDest, folderDest, folderExclude);
+            copyFolderMail(clientSource, folder, clientDest, folderDest, folderExclude, sourceConfig, destConfig);
         }
     }
     catch (System.Exception ex)
@@ -178,6 +215,6 @@ var destPassword = Environment.GetEnvironmentVariable("DEST_PASSWORD") ?? "";
 var source = new ImapConfig(sourceAddress, sourcePort, sourceUsername, sourcePassword);
 var destination = new ImapConfig(destAddress, destPort, destUsername, destPassword);
 
-// copyAllMail(source, destination);
+displayAllFolders(source);
 copySpecificMail(source, destination);
 Console.WriteLine("Done!");
