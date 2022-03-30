@@ -86,6 +86,10 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
                 copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
                 copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Søppelpost");
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Chatteøkter");
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("All e-post");
                 copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
             }
