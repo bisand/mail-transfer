@@ -79,15 +79,15 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
                 // var folderDest = clientDest.Inbox;
 
                 IMailFolder folderSource;
-                // copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null, null, sourceConfig, destConfig);
-                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Papirkurv");
-                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
-                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Sendt e-post");
-                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
-                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
-                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
-                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Søppelpost");
-                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null, null, sourceConfig, destConfig);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Papirkurv");
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Sendt e-post");
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Søppelpost");
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
                 // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Chatteøkter");
                 // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("All e-post");
