@@ -25,8 +25,8 @@ void copyAllMail(ImapConfig sourceConfig, ImapConfig destConfig)
             // var folderDest = clientDest.GetFolder(clientDest.PersonalNamespaces[0]);
             var folderDest = clientDest.Inbox;
 
-            copyFolderMail(clientSource, clientSource.Inbox, clientDest, clientDest.Inbox, null, sourceConfig, destConfig);
-            copyFolderMail(clientSource, folderSource, clientDest, folderDest, null, sourceConfig, destConfig);
+            copyFolderMail(clientSource, clientSource.Inbox, clientDest, clientDest.Inbox, null, null, sourceConfig, destConfig);
+            copyFolderMail(clientSource, folderSource, clientDest, folderDest, null, null, sourceConfig, destConfig);
         }
         clientSource.Disconnect(true);
     }
@@ -79,19 +79,19 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
                 // var folderDest = clientDest.Inbox;
 
                 IMailFolder folderSource;
-                copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null, sourceConfig, destConfig);
-                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Papirkurv");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
-                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Sendt e-post");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
-                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
-                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Søppelpost");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
-                folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Chatteøkter");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
+                // copyFolderMail(clientSource, clientSource.Inbox, clientDest, folderDestRoot, null, null, sourceConfig, destConfig);
+                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Papirkurv");
+                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Sendt e-post");
+                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Stjernemerket");
+                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Søppelpost");
+                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
+                // folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("Chatteøkter");
+                // copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, null, clientDestExclude.Inbox, sourceConfig, destConfig);
                 folderSource = namespaceSource.GetSubfolder("[Gmail]").GetSubfolder("All e-post");
-                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, clientDestExclude.Inbox, sourceConfig, destConfig);
+                copyFolderMail(clientSource, folderSource, clientDest, folderDestRoot, folderDestRoot.GetSubfolder("Arkiv"), clientDestExclude.Inbox, sourceConfig, destConfig);
             }
             clientDest.Disconnect(true);
         }
@@ -100,16 +100,18 @@ void copySpecificMail(ImapConfig sourceConfig, ImapConfig destConfig)
 
 }
 
-void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDestRoot, IMailFolder? folderExclude, ImapConfig sourceConfig, ImapConfig destConfig)
+void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClient clientDest, IMailFolder folderDestRoot, IMailFolder? folderDest, IMailFolder? folderExclude, ImapConfig sourceConfig, ImapConfig destConfig)
 {
     try
     {
         Console.WriteLine("Copying folder: {0}", folderSource.Name);
         string folderName = GetName(folderSource.Name);
-        var folderDest = folderDestRoot.Create(folderName, !folderSource.IsNamespace);
-        if (folderSource.IsSubscribed)
-            folderDest.Subscribe();
-
+        if (folderDest == null)
+        {
+            folderDest = folderDestRoot.Create(folderName, !folderSource.IsNamespace);
+            if (folderSource.IsSubscribed)
+                folderDest.Subscribe();
+        }
         if (!folderSource.IsNamespace && folderSource.Exists && !folderSource.IsOpen)
         {
             folderSource.Open(FolderAccess.ReadOnly);
@@ -142,9 +144,9 @@ void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClien
                         if (address != null)
                             uniqueIds = folderDest.Search(SearchQuery.FromContains(address.ToString()).And(SearchQuery.SubjectContains(message.Subject)));
                     }
-                    if (folderExclude != null && !string.IsNullOrWhiteSpace(messageId))
+                    if ((uniqueIds == null || uniqueIds.Count < 1) && folderExclude != null && !string.IsNullOrWhiteSpace(messageId))
                     {
-                        uniqueIds = folderDest.Search(SearchQuery.HeaderContains("Message-Id", messageId));
+                        uniqueIds = folderExclude.Search(SearchQuery.HeaderContains("Message-Id", messageId));
                     }
                     if (uniqueIds == null || uniqueIds.Count < 1)
                         folderDest.Append(message);
@@ -168,7 +170,7 @@ void copyFolderMail(ImapClient clientSource, IMailFolder folderSource, ImapClien
         }
         foreach (var folder in folderSource.GetSubfolders(false))
         {
-            copyFolderMail(clientSource, folder, clientDest, folderDest, folderExclude, sourceConfig, destConfig);
+            copyFolderMail(clientSource, folder, clientDest, folderDest, null, folderExclude, sourceConfig, destConfig);
         }
     }
     catch (System.Exception ex)
